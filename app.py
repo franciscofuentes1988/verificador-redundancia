@@ -1,16 +1,24 @@
 from flask import Flask, request, render_template, send_file
-from sentence_transformers import SentenceTransformer
+import requests
 from sklearn.metrics.pairwise import cosine_similarity
 import pandas as pd
 import re
-import requests
 from bs4 import BeautifulSoup
 import io
 import tempfile
+import os
 
 app = Flask(__name__)
 
-model = SentenceTransformer('paraphrase-MiniLM-L3-v2')
+HUGGINGFACE_API_TOKEN = os.environ.get("HF_TOKEN")  # debe estar configurado en Render
+API_URL = "https://api-inference.huggingface.co/embeddings/sentence-transformers/paraphrase-MiniLM-L3-v2"
+
+headers = {"Authorization": f"Bearer {HUGGINGFACE_API_TOKEN}"}
+
+def get_embedding(texts):
+    response = requests.post(API_URL, headers=headers, json={"inputs": texts})
+    response.raise_for_status()
+    return response.json()
 
 def dividir_en_chunks(texto, metodo="frases", chunk_size=100):
     if metodo == "parrafos":
@@ -32,9 +40,9 @@ def clasificar_similitud(valor):
         return "No hay redundancia"
 
 def extraer_contenido(url):
-    headers = {"User-Agent": "Mozilla/5.0"}
+    headers_ = {"User-Agent": "Mozilla/5.0"}
     try:
-        r = requests.get(url, headers=headers, timeout=10)
+        r = requests.get(url, headers=headers_, timeout=10)
         soup = BeautifulSoup(r.text, 'html.parser')
         text = soup.body.get_text(separator=" ", strip=True)
         if any(err in text for err in ["Not Acceptable", "Mod_Security", "404", "403", "500"]):
@@ -55,9 +63,9 @@ def index():
             texto = extraer_contenido(url)
             if texto:
                 chunks = dividir_en_chunks(texto)
-                emb = model.encode(chunks)
+                embeddings = get_embedding(chunks)
                 all_chunks.extend(chunks)
-                all_embeddings.extend(emb)
+                all_embeddings.extend(embeddings)
                 origen.extend([url] * len(chunks))
 
         resultados = []
@@ -83,7 +91,6 @@ def index():
     return render_template('index.html')
 
 import os
-
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
