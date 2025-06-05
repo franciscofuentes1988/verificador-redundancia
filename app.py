@@ -10,7 +10,7 @@ import tempfile
 
 app = Flask(__name__)
 
-model = SentenceTransformer('all-MiniLM-L6-v2')
+model = SentenceTransformer('paraphrase-MiniLM-L3-v2')
 
 def dividir_en_chunks(texto, metodo="frases", chunk_size=100):
     if metodo == "parrafos":
