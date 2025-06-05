@@ -10,7 +10,8 @@ import tempfile
 
 app = Flask(__name__)
 
-model = SentenceTransformer('all-MiniLM-L6-v2')
+# Modelo más liviano para evitar errores por memoria
+model = SentenceTransformer('paraphrase-MiniLM-L3-v2')
 
 def dividir_en_chunks(texto, metodo="frases", chunk_size=100):
     if metodo == "parrafos":
@@ -60,6 +61,8 @@ def index():
         if len(urls) == 1:
             # Análisis intra contenido
             chunks = dividir_en_chunks(textos[0])
+            if len(chunks) > 150:
+                chunks = chunks[:150]  # limitar cantidad de chunks
             embeddings = model.encode(chunks)
             sim_matrix = cosine_similarity(embeddings)
 
@@ -80,6 +83,10 @@ def index():
             # Análisis inter contenido
             chunks1 = dividir_en_chunks(textos[0])
             chunks2 = dividir_en_chunks(textos[1])
+            if len(chunks1) > 100:
+                chunks1 = chunks1[:100]
+            if len(chunks2) > 100:
+                chunks2 = chunks2[:100]
             emb1 = model.encode(chunks1)
             emb2 = model.encode(chunks2)
             sim_matrix = cosine_similarity(emb1, emb2)
