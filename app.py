@@ -16,9 +16,13 @@ API_URL = "https://api-inference.huggingface.co/embeddings/sentence-transformers
 headers = {"Authorization": f"Bearer {HUGGINGFACE_API_TOKEN}"}
 
 def get_embedding(texts):
-    response = requests.post(API_URL, headers=headers, json={"inputs": texts})
-    response.raise_for_status()
-    return response.json()
+    try:
+        response = requests.post(API_URL, headers=headers, json={"inputs": texts})
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        print("❌ Error llamando a Hugging Face API:", e)
+        return []
 
 def dividir_en_chunks(texto, metodo="frases", chunk_size=100):
     if metodo == "parrafos":
@@ -69,7 +73,10 @@ def index():
                 origen.extend([url] * len(chunks))
 
         resultados = []
-        sim_matrix = cosine_similarity(all_embeddings)
+if not all_embeddings:
+    return "No se pudieron generar embeddings para las URLs ingresadas. Revisa que sean válidas."
+
+sim_matrix = cosine_similarity(all_embeddings)
         for i in range(len(all_chunks)):
             for j in range(i + 1, len(all_chunks)):
                 score = sim_matrix[i][j]
