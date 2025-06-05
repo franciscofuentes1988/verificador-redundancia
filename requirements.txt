@@ -1,0 +1,8 @@
+flask
+sentence-transformers
+scikit-learn
+pandas
+openpyxl
+beautifulsoup4
+requests
+gunicorn
