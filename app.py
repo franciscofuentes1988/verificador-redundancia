@@ -7,7 +7,6 @@ import requests
 from bs4 import BeautifulSoup
 import io
 import tempfile
-import os
 
 app = Flask(__name__)
 
@@ -48,36 +47,55 @@ def extraer_contenido(url):
 def index():
     if request.method == 'POST':
         urls = request.form['urls'].strip().splitlines()
-        all_chunks = []
-        all_embeddings = []
-        origen = []
 
-        for url in urls:
-            texto = extraer_contenido(url)
-            if texto:
-                chunks = dividir_en_chunks(texto)
-                emb = model.encode(chunks)
-                all_chunks.extend(chunks)
-                all_embeddings.extend(emb)
-                origen.extend([url] * len(chunks))
+        if len(urls) == 0 or len(urls) > 2:
+            return "Por favor ingresa 1 o 2 URLs como máximo."
 
-        if not all_embeddings:
-            return "No se pudieron generar embeddings para las URLs ingresadas. Revisa que sean válidas."
+        textos = [extraer_contenido(url) for url in urls]
+        if any(t is None for t in textos):
+            return "Hubo un error al obtener el contenido de una de las URLs."
 
         resultados = []
-        sim_matrix = cosine_similarity(all_embeddings)
-        for i in range(len(all_chunks)):
-            for j in range(i + 1, len(all_chunks)):
-                score = sim_matrix[i][j]
-                if score >= 0.5:
-                    resultados.append({
-                        "URL 1": origen[i],
-                        "Chunk 1": all_chunks[i],
-                        "URL 2": origen[j],
-                        "Chunk 2": all_chunks[j],
-                        "Similitud": round(score, 3),
-                        "Clasificacion": clasificar_similitud(score)
-                    })
+
+        if len(urls) == 1:
+            # Análisis intra contenido
+            chunks = dividir_en_chunks(textos[0])
+            embeddings = model.encode(chunks)
+            sim_matrix = cosine_similarity(embeddings)
+
+            for i in range(len(chunks)):
+                for j in range(i + 1, len(chunks)):
+                    score = sim_matrix[i][j]
+                    if score >= 0.5:
+                        resultados.append({
+                            "URL 1": urls[0],
+                            "Chunk 1": chunks[i],
+                            "URL 2": urls[0],
+                            "Chunk 2": chunks[j],
+                            "Similitud": round(score, 3),
+                            "Clasificacion": clasificar_similitud(score)
+                        })
+
+        elif len(urls) == 2:
+            # Análisis inter contenido
+            chunks1 = dividir_en_chunks(textos[0])
+            chunks2 = dividir_en_chunks(textos[1])
+            emb1 = model.encode(chunks1)
+            emb2 = model.encode(chunks2)
+            sim_matrix = cosine_similarity(emb1, emb2)
+
+            for i in range(len(chunks1)):
+                for j in range(len(chunks2)):
+                    score = sim_matrix[i][j]
+                    if score >= 0.5:
+                        resultados.append({
+                            "URL 1": urls[0],
+                            "Chunk 1": chunks1[i],
+                            "URL 2": urls[1],
+                            "Chunk 2": chunks2[j],
+                            "Similitud": round(score, 3),
+                            "Clasificacion": clasificar_similitud(score)
+                        })
 
         df = pd.DataFrame(resultados)
         tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx')
@@ -87,5 +105,6 @@ def index():
     return render_template('index.html')
 
 if __name__ == '__main__':
+    import os
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
