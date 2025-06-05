@@ -1,8 +1,9 @@
 from flask import Flask, request, render_template, send_file
-import requests
+from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 import pandas as pd
 import re
+import requests
 from bs4 import BeautifulSoup
 import io
 import tempfile
@@ -10,19 +11,7 @@ import os
 
 app = Flask(__name__)
 
-HUGGINGFACE_API_TOKEN = os.environ.get("HF_TOKEN")  # debe estar configurado en Render
-API_URL = "https://api-inference.huggingface.co/embeddings/sentence-transformers/paraphrase-MiniLM-L3-v2"
-
-headers = {"Authorization": f"Bearer {HUGGINGFACE_API_TOKEN}"}
-
-def get_embedding(texts):
-    try:
-        response = requests.post(API_URL, headers=headers, json={"inputs": texts})
-        response.raise_for_status()
-        return response.json()
-    except Exception as e:
-        print("❌ Error llamando a Hugging Face API:", e)
-        return []
+model = SentenceTransformer('all-MiniLM-L6-v2')
 
 def dividir_en_chunks(texto, metodo="frases", chunk_size=100):
     if metodo == "parrafos":
@@ -44,9 +33,9 @@ def clasificar_similitud(valor):
         return "No hay redundancia"
 
 def extraer_contenido(url):
-    headers_ = {"User-Agent": "Mozilla/5.0"}
+    headers = {"User-Agent": "Mozilla/5.0"}
     try:
-        r = requests.get(url, headers=headers_, timeout=10)
+        r = requests.get(url, headers=headers, timeout=10)
         soup = BeautifulSoup(r.text, 'html.parser')
         text = soup.body.get_text(separator=" ", strip=True)
         if any(err in text for err in ["Not Acceptable", "Mod_Security", "404", "403", "500"]):
@@ -67,16 +56,16 @@ def index():
             texto = extraer_contenido(url)
             if texto:
                 chunks = dividir_en_chunks(texto)
-                embeddings = get_embedding(chunks)
+                emb = model.encode(chunks)
                 all_chunks.extend(chunks)
-                all_embeddings.extend(embeddings)
+                all_embeddings.extend(emb)
                 origen.extend([url] * len(chunks))
 
-        resultados = []
-if not all_embeddings:
-    return "No se pudieron generar embeddings para las URLs ingresadas. Revisa que sean válidas."
+        if not all_embeddings:
+            return "No se pudieron generar embeddings para las URLs ingresadas. Revisa que sean válidas."
 
-sim_matrix = cosine_similarity(all_embeddings)
+        resultados = []
+        sim_matrix = cosine_similarity(all_embeddings)
         for i in range(len(all_chunks)):
             for j in range(i + 1, len(all_chunks)):
                 score = sim_matrix[i][j]
@@ -97,7 +86,6 @@ sim_matrix = cosine_similarity(all_embeddings)
 
     return render_template('index.html')
 
-import os
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
